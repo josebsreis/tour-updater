@@ -1,0 +1,580 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tour Updater</title>
+<style>
+  :root {
+    --bg: #f4f4f2; --panel: #ffffff; --ink: #16171a; --muted: #6b6e76; --line: #e3e3df;
+    --accent: #16171a; --accent-ink: #ffffff; --soft: #f0efeb; --ok: #1e7d4f; --bad: #b3261e; --gold: #c99a52;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #121315; --panel: #1b1c1f; --ink: #f2f2f0; --muted: #9a9ca3; --line: #2c2d31;
+      --accent: #f2f2f0; --accent-ink: #121315; --soft: #232428; --ok: #5ccf94; --bad: #ff8a80; --gold: #e9b872;
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); }
+  body { font: 15px/1.5 -apple-system, "Segoe UI", system-ui, Roboto, Arial, sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { font-size: 26px; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .lede { color: var(--muted); margin: 0 0 24px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 20px; margin-bottom: 16px; }
+  .step { display: flex; gap: 10px; align-items: baseline; margin: 0 0 12px; font-size: 17px; }
+  .step b { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); font-size: 14px; flex: none; }
+  .drop { border: 2px dashed var(--line); border-radius: 12px; padding: 28px 16px; text-align: center; color: var(--muted); transition: border-color .15s, background .15s; }
+  .drop.over { border-color: var(--gold); background: var(--soft); color: var(--ink); }
+  .drop strong { color: var(--ink); }
+  button, .button { font: inherit; font-weight: 600; border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 999px; padding: 8px 16px; cursor: pointer; }
+  button:hover, .button:hover { background: var(--soft); }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); padding: 12px 22px; font-size: 16px; }
+  button.primary:disabled { opacity: .45; cursor: default; }
+  button.small { padding: 5px 11px; font-size: 13px; font-weight: 500; }
+  button.icon { width: 34px; height: 34px; padding: 0; display: inline-grid; place-items: center; }
+  input[type="file"] { display: none; }
+  .loaded { display: flex; justify-content: space-between; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .loaded .what { font-weight: 600; }
+  .muted { color: var(--muted); }
+  .rooms { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+  .room { display: grid; grid-template-columns: 22px 160px 1fr auto; gap: 14px; align-items: center; padding: 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+  .room.dragging { opacity: .4; }
+  .room.drop-target { border-color: var(--gold); background: var(--soft); }
+  .grip { cursor: grab; color: var(--muted); text-align: center; user-select: none; font-size: 18px; line-height: 1; }
+  .thumb { width: 160px; height: 80px; border-radius: 8px; background: var(--soft) center/cover no-repeat; position: relative; overflow: hidden; }
+  .thumb .badge { position: absolute; left: 6px; bottom: 6px; font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 999px; background: rgba(0,0,0,.65); color: #fff; }
+  .thumb .badge.new { background: var(--gold); color: #1f1609; left: auto; right: 6px; }
+  .fields { min-width: 0; }
+  .fields .num { font-size: 12px; color: var(--muted); margin-bottom: 3px; }
+  .fields input[type="text"] { width: 100%; font: inherit; font-weight: 600; padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); }
+  .fields .note { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
+  .fields .note.bad { color: var(--bad); }
+  .actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-end; max-width: 210px; }
+  .add { margin-top: 12px; }
+  .bar { height: 8px; border-radius: 999px; background: var(--soft); overflow: hidden; margin: 10px 0 6px; }
+  .bar i { display: block; height: 100%; width: 0; background: var(--gold); transition: width .2s; }
+  .msg { font-size: 14px; }
+  .msg.ok { color: var(--ok); font-weight: 600; }
+  .msg.bad { color: var(--bad); font-weight: 600; }
+  .done-steps { margin: 8px 0 0; padding-left: 20px; color: var(--muted); }
+  .hidden { display: none !important; }
+  footer { color: var(--muted); font-size: 13px; text-align: center; margin-top: 24px; }
+  @media (max-width: 640px) {
+    .room { grid-template-columns: 22px 1fr; }
+    .thumb { grid-column: 2; width: 100%; height: 90px; }
+    .fields, .actions { grid-column: 2; max-width: none; justify-content: flex-start; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>Tour Updater</h1>
+  <p class="lede">Replace, rename, reorder or add the rooms of a tour, then download it ready to upload. Everything happens on this computer — nothing is sent anywhere.</p>
+
+  <section class="card" id="load">
+    <p class="step"><b>1</b> Open the tour</p>
+    <div class="drop" id="folderDrop">
+      <p><strong>Drop the tour folder here</strong><br>(the folder you upload to the server, with <code>index.html</code> inside)</p>
+      <label class="button" for="folderPick">Or choose the folder…</label>
+      <input type="file" id="folderPick" webkitdirectory directory multiple>
+    </div>
+    <div class="loaded hidden" id="loadedInfo">
+      <div><div class="what" id="tourTitle"></div><div class="muted" id="tourFacts"></div></div>
+      <button class="small" id="reload">Open a different tour</button>
+    </div>
+    <p class="msg bad hidden" id="loadError"></p>
+  </section>
+
+  <section class="card hidden" id="edit">
+    <p class="step"><b>2</b> Change the rooms</p>
+    <p class="muted" style="margin-top:-6px">Drag a new panorama onto a room to replace its picture, or use <em>Replace</em>. Type to rename. Drag <span aria-hidden="true">⠿</span> or use the arrows to reorder — the first room is where the tour starts. A square top-bottom panorama (left eye on top) gives VR depth; a 2:1 panorama is flat.</p>
+    <ul class="rooms" id="rooms"></ul>
+    <div class="drop add" id="addDrop">
+      <strong>Add a room</strong> — drop a new panorama here, or <label class="button small" for="addPick" style="display:inline-block">choose a file…</label>
+      <input type="file" id="addPick" accept="image/jpeg,image/png,image/webp">
+    </div>
+  </section>
+
+  <section class="card hidden" id="save">
+    <p class="step"><b>3</b> Save the updated tour</p>
+    <button class="primary" id="build">Make the updated tour</button>
+    <div class="hidden" id="progress">
+      <div class="bar"><i id="barFill"></i></div>
+      <div class="msg" id="progressMsg"></div>
+    </div>
+    <div class="hidden" id="doneBox">
+      <p class="msg ok" id="doneMsg"></p>
+      <ol class="done-steps">
+        <li>Unzip the downloaded file.</li>
+        <li>Upload its contents to the server, in place of the old tour.</li>
+        <li>Open the tour link and step through every room. On a headset that saved the tour offline, press <em>Update offline copy</em>.</li>
+      </ol>
+      <p><button class="small" id="downloadAgain">Download again</button></p>
+    </div>
+  </section>
+
+  <footer>Works with tours exported by Tour Studio. Tiles are made at the tour's own JPEG quality, at full resolution.</footer>
+</main>
+
+<script>
+(function () {
+  'use strict';
+
+  // ───────────────────────── state ─────────────────────────
+  var files = null;        // Map: path -> File|Blob, the tour folder as loaded
+  var doc = null;          // the tour document from index.html
+  var rooms = [];          // [{ scene, name, original: bool, pending: {file, bitmap, kind, thumb} | null }]
+  var removedDirs = [];    // tile folders of rooms replaced or removed
+  var lastZip = null, lastZipName = '';
+
+  var $ = function (id) { return document.getElementById(id); };
+  var DOC_RE = /(<script type="application\/json" id="tour-doc">)([\s\S]*?)(<\/script>)/;
+
+  // ───────────────────────── loading ─────────────────────────
+  function readEntry(entry, prefix, out) {
+    if (entry.isFile) {
+      return new Promise(function (res, rej) { entry.file(function (f) { out.push({ path: prefix + entry.name, file: f }); res(); }, rej); });
+    }
+    if (!entry.isDirectory) return Promise.resolve();
+    var reader = entry.createReader();
+    var all = [];
+    var more = function () {
+      return new Promise(function (res, rej) { reader.readEntries(res, rej); }).then(function (batch) {
+        if (!batch.length) return;
+        all = all.concat(batch);
+        return more();
+      });
+    };
+    return more().then(function () {
+      return all.reduce(function (p, e) { return p.then(function () { return readEntry(e, prefix + entry.name + '/', out); }); }, Promise.resolve());
+    });
+  }
+
+  function filesFromDrop(dt) {
+    var entries = [];
+    for (var i = 0; i < dt.items.length; i++) {
+      var e = dt.items[i].webkitGetAsEntry && dt.items[i].webkitGetAsEntry();
+      if (e) entries.push(e);
+    }
+    var out = [];
+    return entries.reduce(function (p, e) { return p.then(function () { return readEntry(e, '', out); }); }, Promise.resolve()).then(function () { return out; });
+  }
+
+  function loadFiles(list) {
+    // Find the folder that holds the tour's index.html, wherever it was dropped from.
+    var index = list.filter(function (f) { return /(^|\/)index\.html$/.test(f.path); })
+      .sort(function (a, b) { return a.path.split('/').length - b.path.split('/').length; })[0];
+    if (!index) return Promise.reject(new Error('No index.html in what was dropped. Drop the tour folder itself.'));
+    var root = index.path.slice(0, index.path.length - 'index.html'.length);
+    var map = new Map();
+    list.forEach(function (f) {
+      if (f.path.indexOf(root) !== 0) return;
+      var rel = f.path.slice(root.length);
+      if (!rel || rel.split('/').some(function (part) { return part.charAt(0) === '.'; })) return; // .DS_Store, .git
+      map.set(rel, f.file);
+    });
+    return map.get('index.html').text().then(function (html) {
+      var m = html.match(DOC_RE);
+      if (!m) throw new Error('This index.html has no tour in it — is this a tour exported by Tour Studio?');
+      var d = JSON.parse(m[2]);
+      if (!d || !Array.isArray(d.scenes)) throw new Error('The tour in this folder could not be read.');
+      files = map; doc = d; removedDirs = [];
+      rooms = d.scenes.map(function (s) { return { scene: s, name: s.name || 'Room', original: true, pending: null }; });
+      showLoaded();
+    });
+  }
+
+  function showLoaded() {
+    $('folderDrop').classList.add('hidden');
+    $('loadedInfo').classList.remove('hidden');
+    $('loadError').classList.add('hidden');
+    $('tourTitle').textContent = doc.title || 'Tour';
+    var mb = 0; files.forEach(function (f) { mb += f.size; });
+    $('tourFacts').textContent = rooms.length + ' rooms · ' + files.size + ' files · ' + (mb / 1e6).toFixed(1) + ' MB';
+    $('edit').classList.remove('hidden');
+    $('save').classList.remove('hidden');
+    $('doneBox').classList.add('hidden');
+    renderRooms();
+  }
+
+  function fail(where, err) {
+    var el = $(where);
+    el.textContent = (err && err.message) || String(err);
+    el.classList.remove('hidden');
+  }
+
+  // ───────────────────────── rooms ─────────────────────────
+  function thumbFor(room) {
+    if (room.pending) return room.pending.thumb;
+    var src = room.scene.source || {};
+    var base = src.kind === 'tiled' && files.get(src.dir + '/base.' + (src.format || 'jpg'));
+    if (base) { room._thumbUrl = room._thumbUrl || URL.createObjectURL(base); return room._thumbUrl; }
+    return '';
+  }
+
+  function renderRooms() {
+    var ul = $('rooms');
+    ul.textContent = '';
+    rooms.forEach(function (room, i) {
+      var li = document.createElement('li');
+      li.className = 'room';
+      li.draggable = true;
+      li.dataset.index = i;
+
+      var grip = document.createElement('div'); grip.className = 'grip'; grip.textContent = '⠿'; grip.title = 'Drag to reorder';
+      var thumb = document.createElement('div'); thumb.className = 'thumb';
+      var url = thumbFor(room); if (url) thumb.style.backgroundImage = 'url("' + url + '")';
+      var vr = room.pending ? room.pending.kind === 'stereo' : !!room.scene.stereo;
+      var badge = document.createElement('span'); badge.className = 'badge'; badge.textContent = vr ? 'VR 3D' : 'Flat';
+      thumb.appendChild(badge);
+      if (room.pending) { var nb = document.createElement('span'); nb.className = 'badge new'; nb.textContent = room.original ? 'New picture' : 'New room'; thumb.appendChild(nb); }
+
+      var fields = document.createElement('div'); fields.className = 'fields';
+      var num = document.createElement('div'); num.className = 'num'; num.textContent = i === 0 ? 'Room 1 — the tour starts here' : 'Room ' + (i + 1);
+      var name = document.createElement('input'); name.type = 'text'; name.value = room.name; name.setAttribute('aria-label', 'Room name');
+      name.addEventListener('input', function () { room.name = name.value; });
+      var note = document.createElement('div'); note.className = 'note';
+      if (room.pending) note.textContent = room.pending.file.name + ' · ' + room.pending.bitmap.width + '×' + room.pending.bitmap.height;
+      fields.appendChild(num); fields.appendChild(name); fields.appendChild(note);
+
+      var actions = document.createElement('div'); actions.className = 'actions';
+      var up = button('↑', 'Move up', function () { move(i, i - 1); }); up.className = 'icon'; up.disabled = i === 0;
+      var down = button('↓', 'Move down', function () { move(i, i + 1); }); down.className = 'icon'; down.disabled = i === rooms.length - 1;
+      var pick = document.createElement('input'); pick.type = 'file'; pick.accept = 'image/jpeg,image/png,image/webp';
+      pick.addEventListener('change', function () { if (pick.files[0]) setPicture(room, pick.files[0], note); });
+      var replace = button('Replace…', 'Replace this room\'s picture', function () { pick.click(); }); replace.className = 'small';
+      var remove = button('Remove', 'Remove this room', function () {
+        if (rooms.length === 1) { note.textContent = 'A tour needs at least one room.'; note.classList.add('bad'); return; }
+        if (!confirm('Remove "' + room.name + '" from the tour?')) return;
+        rooms.splice(i, 1); renderRooms();
+      }); remove.className = 'small';
+      actions.appendChild(up); actions.appendChild(down); actions.appendChild(replace); actions.appendChild(remove); actions.appendChild(pick);
+
+      li.appendChild(grip); li.appendChild(thumb); li.appendChild(fields); li.appendChild(actions);
+
+      // Reorder by dragging the card; replace by dropping an image on it.
+      li.addEventListener('dragstart', function (e) { e.dataTransfer.setData('text/x-room', String(i)); e.dataTransfer.effectAllowed = 'move'; li.classList.add('dragging'); });
+      li.addEventListener('dragend', function () { li.classList.remove('dragging'); });
+      li.addEventListener('dragover', function (e) { e.preventDefault(); li.classList.add('drop-target'); });
+      li.addEventListener('dragleave', function () { li.classList.remove('drop-target'); });
+      li.addEventListener('drop', function (e) {
+        e.preventDefault(); li.classList.remove('drop-target');
+        var from = e.dataTransfer.getData('text/x-room');
+        if (from !== '') { move(Number(from), i); return; }
+        var f = e.dataTransfer.files && e.dataTransfer.files[0];
+        if (f) setPicture(room, f, note);
+      });
+      ul.appendChild(li);
+    });
+    $('build').disabled = false;
+  }
+
+  function button(text, label, onClick) {
+    var b = document.createElement('button'); b.type = 'button'; b.textContent = text; b.title = label; b.setAttribute('aria-label', label);
+    b.addEventListener('click', onClick); return b;
+  }
+
+  function move(from, to) {
+    if (to < 0 || to >= rooms.length || from === to) return;
+    var r = rooms.splice(from, 1)[0]; rooms.splice(to, 0, r); renderRooms();
+  }
+
+  // A picture, checked and read: square = top-bottom stereo, 2:1 = flat.
+  function readPicture(file) {
+    return createImageBitmap(file).then(function (bitmap) {
+      var w = bitmap.width, h = bitmap.height, kind = null;
+      if (w === h) kind = 'stereo';
+      else if (Math.abs(h / w - 0.5) <= 0.02) kind = 'flat';
+      if (!kind) { bitmap.close(); throw new Error(file.name + ' is ' + w + '×' + h + ': a 360 panorama is 2:1 (flat) or square (top-bottom stereo).'); }
+      var c = document.createElement('canvas'); c.width = 320; c.height = 160;
+      var g = c.getContext('2d'); g.imageSmoothingQuality = 'high';
+      g.drawImage(bitmap, 0, 0, w, kind === 'stereo' ? w / 2 : h, 0, 0, 320, 160);
+      return { file: file, bitmap: bitmap, kind: kind, thumb: c.toDataURL('image/jpeg', 0.8) };
+    });
+  }
+
+  function setPicture(room, file, note) {
+    note.textContent = 'Reading ' + file.name + '…'; note.classList.remove('bad');
+    return readPicture(file).then(function (p) {
+      if (room.pending) room.pending.bitmap.close();
+      room.pending = p; renderRooms();
+    }, function (err) { note.textContent = err.message; note.classList.add('bad'); });
+  }
+
+  function addRoom(file) {
+    return readPicture(file).then(function (p) {
+      var base = file.name.replace(/\.[^.]+$/, '').replace(/^\s*(view\s*)?\d+\s*[-–_.]\s*/i, '').replace(/\s*-\s*D\d+\s*$/i, '').trim();
+      rooms.push({ scene: null, name: base || 'New room', original: false, pending: p });
+      renderRooms();
+    }, function (err) { alert(err.message); });
+  }
+
+  // ───────────────────────── tiles ─────────────────────────
+  var rand = function () { var a = new Uint8Array(4); crypto.getRandomValues(a); return Array.prototype.map.call(a, function (b) { return ('0' + b.toString(16)).slice(-2); }).join(''); };
+  var slugOf = function (s) { return (s || 'room').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 32) || 'room'; };
+  function toJpeg(canvas, q) { return new Promise(function (res, rej) { canvas.toBlob(function (b) { b ? res(b) : rej(new Error('A tile could not be encoded.')); }, 'image/jpeg', q); }); }
+  var tick = function () { return new Promise(function (r) { setTimeout(r, 0); }); };
+
+  // The grid Tour Studio uses: about 1024 a tile, a power of two across, and
+  // the picture's own size whenever the grid divides it (6000 = 8 × 750).
+  function grid(width) {
+    var cols = Math.min(16, Math.max(2, Math.pow(2, Math.round(Math.log2(width / 1024)))));
+    var tile = width % cols === 0 ? width / cols : Math.floor(width / cols / 8) * 8;
+    return { cols: cols, tile: tile };
+  }
+
+  // Draw tiles out of a region of the picture into files: [path, blob].
+  function cut(bitmap, sx, sy, sw, sh, cols, rows, q, name, out, onTile) {
+    var g = grid(sw), tile = g.tile, src = sw / cols;
+    var c = document.createElement('canvas'); c.width = tile; c.height = tile;
+    var ctx = c.getContext('2d'); ctx.imageSmoothingQuality = 'high';
+    var jobs = [];
+    for (var col = 0; col < cols; col++) for (var row = 0; row < rows; row++) jobs.push([col, row]);
+    return jobs.reduce(function (p, j) {
+      return p.then(function () {
+        ctx.drawImage(bitmap, sx + j[0] * src, sy + j[1] * src, src, src, 0, 0, tile, tile);
+        return toJpeg(c, q).then(function (blob) { out.push([name(j[0], j[1]), blob]); onTile(); return tick(); });
+      });
+    }, Promise.resolve()).then(function () { return { tile: tile }; });
+  }
+
+  function tileRoom(room, q, out, onTile) {
+    var b = room.pending.bitmap, w = b.width, flatH = room.pending.kind === 'stereo' ? w / 2 : b.height;
+    var g = grid(w), cols = g.cols, rows = cols / 2, id = rand(), slug = slugOf(room.name);
+    var flatDir = 'tiles/' + slug + '-' + id;
+    var result = {};
+    // The flat room (the left eye of a stereo picture), and its 3072 base image.
+    return cut(b, 0, 0, w, flatH, cols, rows, q, function (c, r) { return flatDir + '/tile_' + c + '_' + r + '.jpg'; }, out, onTile)
+      .then(function (t) {
+        var base = document.createElement('canvas'); base.width = 3072; base.height = 1536;
+        var ctx = base.getContext('2d'); ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(b, 0, 0, w, flatH, 0, 0, 3072, 1536);
+        return toJpeg(base, q).then(function (blob) {
+          out.push([flatDir + '/base.jpg', blob]);
+          result.source = { kind: 'tiled', dir: flatDir, width: t.tile * cols, cols: cols, rows: rows, format: 'jpg' };
+        });
+      })
+      .then(function () {
+        if (room.pending.kind !== 'stereo') return;
+        // The VR stereo picture: one full-size level, square, with its stereo.json.
+        var sDir = 'tiles/' + slug + '-stereo-' + id;
+        return cut(b, 0, 0, w, w, cols, cols, q, function (c, r) { return sDir + '/0/' + c + '_' + r + '.jpg'; }, out, onTile).then(function (t) {
+          var side = t.tile * cols;
+          var manifest = { layout: 'top-bottom', format: 'jpg', levels: [{ path: '0', width: side, height: side, cols: cols, rows: cols }] };
+          out.push([sDir + '/stereo.json', new Blob([JSON.stringify(manifest, null, 1) + '\n'], { type: 'application/json' })]);
+          result.stereo = { src: sDir, layout: 'top-bottom' };
+        });
+      })
+      .then(function () { return result; });
+  }
+
+  // ───────────────────────── building ─────────────────────────
+  function tileDirsOf(scene) {
+    var dirs = [];
+    if (scene && scene.source && scene.source.kind === 'tiled') dirs.push(scene.source.dir);
+    if (scene && scene.stereo && scene.stereo.src && !/\.[a-z]+$/i.test(scene.stereo.src)) dirs.push(scene.stereo.src);
+    return dirs;
+  }
+
+  function newScene(name) {
+    var first = doc.scenes[0] || {};
+    return {
+      id: 'scene-' + rand(),
+      name: name,
+      projection: 'equirect',
+      initialView: { yaw: 0, pitch: 0, fov: (first.initialView && first.initialView.fov) || undefined },
+      layers: [{ id: 'layer-' + rand(), name: 'Hotspots', visible: true, locked: false, hotspots: [] }]
+    };
+  }
+
+  function sha256(text) {
+    return crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)).then(function (buf) {
+      return Array.prototype.map.call(new Uint8Array(buf), function (b) { return ('0' + b.toString(16)).slice(-2); }).join('');
+    });
+  }
+
+  function build() {
+    var opts = (doc.runtime && doc.runtime.tileOptions) || {};
+    var q = Math.max(0.01, Math.min(1, (opts.quality || 80) / 100));
+    var todo = rooms.filter(function (r) { return r.pending; });
+    var perRoom = function (r) { var g = grid(r.pending.bitmap.width); return g.cols * g.cols / 2 + 1 + (r.pending.kind === 'stereo' ? g.cols * g.cols : 0); };
+    var total = todo.reduce(function (n, r) { return n + perRoom(r); }, 0) + 1, done = 0;
+    var progress = function (msg) {
+      $('barFill').style.width = Math.round(done / total * 100) + '%';
+      if (msg) $('progressMsg').textContent = msg;
+    };
+    var added = [];
+    var nextScenes = [];
+
+    $('build').disabled = true; $('progress').classList.remove('hidden'); $('doneBox').classList.add('hidden');
+    $('progressMsg').classList.remove('bad');
+
+    // Tile every new picture, room by room.
+    return rooms.reduce(function (p, room, i) {
+      return p.then(function () {
+        var scene = room.scene ? JSON.parse(JSON.stringify(room.scene)) : newScene(room.name);
+        scene.name = (room.name || '').trim() || 'Room ' + (i + 1);
+        if (!scene.initialView.fov) delete scene.initialView.fov;
+        if (!room.pending) { nextScenes.push(scene); return; }
+        progress('Making tiles for ' + scene.name + '…');
+        if (room.scene) removedDirs = removedDirs.concat(tileDirsOf(room.scene));
+        return tileRoom(room, q, added, function () { done++; progress(); }).then(function (made) {
+          scene.source = made.source;
+          delete scene.covers;
+          if (made.stereo) scene.stereo = made.stereo; else delete scene.stereo;
+          nextScenes.push(scene);
+        });
+      });
+    }, Promise.resolve()).then(function () {
+      progress('Writing the tour…');
+      // Rooms removed from the tour take their tiles with them.
+      var kept = {}; nextScenes.forEach(function (s) { tileDirsOf(s).forEach(function (d) { kept[d] = true; }); });
+      doc.scenes.forEach(function (s) { tileDirsOf(s).forEach(function (d) { if (!kept[d]) removedDirs.push(d); }); });
+
+      var nextDoc = JSON.parse(JSON.stringify(doc));
+      nextDoc.scenes = nextScenes;
+      var out = new Map();
+      files.forEach(function (f, path) {
+        if (removedDirs.some(function (d) { return path.indexOf(d + '/') === 0; })) return;
+        out.set(path, f);
+      });
+      added.forEach(function (a) { out.set(a[0], a[1]); });
+
+      var inline = JSON.stringify(nextDoc).replace(/</g, '\\u003c');
+      var rewrite = function (path) {
+        var f = out.get(path); if (!f) return Promise.resolve();
+        return f.text().then(function (html) {
+          out.set(path, new Blob([html.replace(DOC_RE, function (_, a, __, c) { return a + inline + c; })], { type: 'text/html' }));
+        });
+      };
+      return Promise.all([rewrite('index.html'), rewrite('embed.html')]).then(function () {
+        out.set('tour.json', new Blob([JSON.stringify(nextDoc, null, 2) + '\n'], { type: 'application/json' }));
+        return offlineList(out);
+      }).then(function () { return { out: out, doc: nextDoc }; });
+    }).then(function (r) {
+      done = total - 1; progress('Packing the zip…');
+      return tick().then(function () { return zip(r.out); }).then(function (blob) {
+        done = total; progress('');
+        lastZip = blob;
+        lastZipName = (doc.title || 'Tour').replace(/[\\/:*?"<>|]+/g, ' ').trim() + ' (updated).zip';
+        download();
+        // The tour as it is now becomes the starting point for further changes.
+        rooms.forEach(function (room) { if (room.pending) room.pending.bitmap.close(); });
+        files = r.out; doc = r.doc; removedDirs = [];
+        rooms = doc.scenes.map(function (s) { return { scene: s, name: s.name, original: true, pending: null }; });
+        renderRooms(); showLoaded();
+        $('progress').classList.add('hidden');
+        $('doneMsg').textContent = 'Done — ' + rooms.length + ' rooms, ' + (blob.size / 1e6).toFixed(1) + ' MB. The zip has been downloaded.';
+        $('doneBox').classList.remove('hidden');
+        window.__lastBuild = r;
+        return r;
+      });
+    }).catch(function (err) {
+      $('progressMsg').textContent = 'Something went wrong: ' + ((err && err.message) || err);
+      $('progressMsg').classList.add('bad');
+      $('build').disabled = false;
+      throw err;
+    });
+  }
+
+  // offline.json: every file the page loads, as it loads it, with a new version.
+  function offlineList(out) {
+    var old = { version: '', files: [] };
+    var f = out.get('offline.json');
+    return (f ? f.text().then(function (t) { try { old = JSON.parse(t); } catch (e) {} }) : Promise.resolve()).then(function () {
+      if (!f) return;
+      var stamped = {};
+      old.files.forEach(function (u) { var q = u.indexOf('?'); if (q > 0) stamped[u.slice(0, q)] = u; });
+      var skip = { 'tour.json': 1, 'offline.json': 1, 'sw.js': 1, 'shots.csv': 1, 'shots.json': 1 };
+      var paths = Array.from(out.keys()).filter(function (p) { return !skip[p]; }).sort();
+      var bytes = 0, key = '';
+      var list = paths.map(function (p) {
+        var size = out.get(p).size; bytes += size; key += p + '\n' + size + '\n';
+        var url = p.split('/').map(encodeURIComponent).join('/');
+        return stamped[url] || url;
+      });
+      return out.get('index.html').text().then(function (html) { return sha256(key + html); }).then(function (hex) {
+        out.set('offline.json', new Blob([JSON.stringify({ version: hex.slice(0, 12), bytes: bytes, files: list }, null, 1) + '\n'], { type: 'application/json' }));
+      });
+    });
+  }
+
+  // ───────────────────────── zip (stored: JPEGs do not compress) ─────────────────────────
+  var CRC = (function () { var t = new Uint32Array(256); for (var n = 0; n < 256; n++) { var c = n; for (var k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+  function crc32(bytes) { var c = 0xffffffff; for (var i = 0; i < bytes.length; i++) c = CRC[(c ^ bytes[i]) & 0xff] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; }
+  function zip(map) {
+    var parts = [], central = [], offset = 0, enc = new TextEncoder();
+    var now = new Date();
+    var dosTime = (now.getHours() << 11) | (now.getMinutes() << 5) | (now.getSeconds() >> 1);
+    var dosDate = ((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate();
+    var entries = Array.from(map.entries()).sort(function (a, b) { return a[0] < b[0] ? -1 : 1; });
+    return entries.reduce(function (p, e) {
+      return p.then(function () { return e[1].arrayBuffer(); }).then(function (buf) {
+        var data = new Uint8Array(buf), name = enc.encode(e[0]), crc = crc32(data);
+        var h = new DataView(new ArrayBuffer(30));
+        h.setUint32(0, 0x04034b50, true); h.setUint16(4, 20, true); h.setUint16(6, 0x0800, true); h.setUint16(8, 0, true);
+        h.setUint16(10, dosTime, true); h.setUint16(12, dosDate, true); h.setUint32(14, crc, true);
+        h.setUint32(18, data.length, true); h.setUint32(22, data.length, true); h.setUint16(26, name.length, true); h.setUint16(28, 0, true);
+        parts.push(h.buffer, name, data);
+        var c = new DataView(new ArrayBuffer(46));
+        c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true); c.setUint16(8, 0x0800, true); c.setUint16(10, 0, true);
+        c.setUint16(12, dosTime, true); c.setUint16(14, dosDate, true); c.setUint32(16, crc, true);
+        c.setUint32(20, data.length, true); c.setUint32(24, data.length, true); c.setUint16(28, name.length, true);
+        c.setUint16(30, 0, true); c.setUint16(32, 0, true); c.setUint16(34, 0, true); c.setUint16(36, 0, true); c.setUint32(38, 0, true); c.setUint32(42, offset, true);
+        central.push(c.buffer, name);
+        offset += 30 + name.length + data.length;
+      });
+    }, Promise.resolve()).then(function () {
+      var size = central.reduce(function (n, b) { return n + (b.byteLength || b.length); }, 0);
+      var end = new DataView(new ArrayBuffer(22));
+      end.setUint32(0, 0x06054b50, true); end.setUint16(8, entries.length, true); end.setUint16(10, entries.length, true);
+      end.setUint32(12, size, true); end.setUint32(16, offset, true);
+      return new Blob(parts.concat(central, [end.buffer]), { type: 'application/zip' });
+    });
+  }
+
+  function download() {
+    if (!lastZip) return;
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(lastZip); a.download = lastZipName;
+    document.body.appendChild(a); a.click(); a.remove();
+  }
+
+  // ───────────────────────── wiring ─────────────────────────
+  function dropZone(el, onDrop) {
+    el.addEventListener('dragover', function (e) { e.preventDefault(); el.classList.add('over'); });
+    el.addEventListener('dragleave', function () { el.classList.remove('over'); });
+    el.addEventListener('drop', function (e) { e.preventDefault(); el.classList.remove('over'); onDrop(e.dataTransfer); });
+  }
+  dropZone($('folderDrop'), function (dt) {
+    filesFromDrop(dt).then(loadFiles).catch(function (err) { fail('loadError', err); });
+  });
+  $('folderPick').addEventListener('change', function () {
+    var list = Array.prototype.map.call(this.files, function (f) { return { path: f.webkitRelativePath || f.name, file: f }; });
+    loadFiles(list).catch(function (err) { fail('loadError', err); });
+  });
+  $('reload').addEventListener('click', function () { location.reload(); });
+  dropZone($('addDrop'), function (dt) { if (dt.files && dt.files[0]) addRoom(dt.files[0]); });
+  $('addPick').addEventListener('change', function () { if (this.files[0]) addRoom(this.files[0]); this.value = ''; });
+  $('build').addEventListener('click', function () { build().catch(function () {}); });
+  $('downloadAgain').addEventListener('click', download);
+  // Dropping a file anywhere else must not open it in place of this page.
+  window.addEventListener('dragover', function (e) { e.preventDefault(); });
+  window.addEventListener('drop', function (e) { e.preventDefault(); });
+
+  // For checking the page without a mouse: load files, set pictures, build.
+  window.__updater = {
+    loadFiles: loadFiles,
+    rooms: function () { return rooms; },
+    setPicture: function (i, file) { return readPicture(file).then(function (p) { rooms[i].pending = p; renderRooms(); }); },
+    addRoom: addRoom, move: move,
+    rename: function (i, name) { rooms[i].name = name; renderRooms(); },
+    build: build
+  };
+})();
+</script>
+</body>
+</html>
